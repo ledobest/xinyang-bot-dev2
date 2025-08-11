@@ -16,4 +16,4 @@ COPY . .
 # 6. 設定最終的啟動指令
 # gunicorn 會自動監聽由 Railway 提供的 $PORT 變數
 
-CMD gunicorn --bind 0.0.0.0:$PORT app:app
+CMD ["gunicorn", "--worker-class", "gevent", "--bind", "0.0.0.0:$PORT", "app:app"]
