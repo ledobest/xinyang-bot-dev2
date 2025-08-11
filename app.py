@@ -5,9 +5,7 @@ import os
 from flask import Flask, request, abort
 
 # 【重要】我們使用的是新版的 line-bot-sdk，這是正確的匯入路徑
-from line_bot_sdk import (
-    LineBotApi, WebhookHandler
-)
+from linebot import LineBotApi, WebhookHandler
 from line_bot_sdk.exceptions import (
     InvalidSignatureError
 )
@@ -91,3 +89,4 @@ def handle_message(event):
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+
