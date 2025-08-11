@@ -1,72 +1,77 @@
 # -*- coding: utf-8 -*-
-import os, hmac, hashlib, base64, threading
+
+# 載入我們需要的工具
+import os
 from flask import Flask, request, abort
 
-from line_bot_sdk import LineBotApi, WebhookHandler
-from line_bot_sdk.exceptions import InvalidSignatureError
-from line_bot_sdk.models import MessageEvent, TextMessage, TextSendMessage
+from line_bot_sdk import (
+    LineBotApi, WebhookHandler
+)
+from line_bot_sdk.exceptions import (
+    InvalidSignatureError
+)
+from line_bot_sdk.models import (
+    MessageEvent, TextMessage, TextSendMessage,
+)
 
+# 初始化 Flask App
 app = Flask(__name__)
 
-# 讀環境變數
-CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET")
-CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
-if not CHANNEL_SECRET:
-    print("錯誤: 找不到 LINE_CHANNEL_SECRET 環境變數")
-if not CHANNEL_ACCESS_TOKEN:
-    print("錯誤: 找不到 LINE_CHANNEL_ACCESS_TOKEN 環境變數")
-if not CHANNEL_SECRET or not CHANNEL_ACCESS_TOKEN:
-    raise SystemExit("錯誤: 金鑰不完整，程式無法啟動。")
+# 從「環境變數」中取得金鑰 (這是安全的作法)
+CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET', None)
+CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN', None)
 
-# LINE SDK
-line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
-handler = WebhookHandler(CHANNEL_SECRET)
+# 檢查金鑰是否存在，這一步對於除錯非常重要
+if CHANNEL_SECRET is None:
+    print('錯誤: 找不到 LINE_CHANNEL_SECRET 環境變數')
+if CHANNEL_ACCESS_TOKEN is None:
+    print('錯誤: 找不到 LINE_CHANNEL_ACCESS_TOKEN 環境變數')
 
-# 健康檢查
-@app.get("/health")
-def health():
-    return ("OK", 200)
+# 初始化 LINE Bot API 和 Webhook Handler
+# 確保在金鑰存在時才進行初始化
+if CHANNEL_SECRET and CHANNEL_ACCESS_TOKEN:
+    line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
+    handler = WebhookHandler(CHANNEL_SECRET)
+else:
+    # 如果金鑰不存在，程式無法啟動，直接退出
+    print("錯誤: 金鑰不完整，程式無法啟動。")
+    exit()
 
-# Webhook 入口：先驗簽 -> 立刻回 200 -> 背景處理
-@app.post("/callback")
+
+# 設定 Webhook 的進入點，這就是我們要給 LINE 的網址路徑
+@app.route("/callback", methods=['POST'])
 def callback():
-    # 原始 bytes 與 header
-    body_bytes = request.get_data()           # bytes
-    body_text  = body_bytes.decode("utf-8")   # str（給 handler 用）
-    signature  = request.headers.get("X-Line-Signature", "")
+    # 取得 X-Line-Signature HTTP 標頭的值
+    signature = request.headers['X-Line-Signature']
 
-    # 輕量簽章驗證（使用原始 bytes）
-    digest = hmac.new(CHANNEL_SECRET.encode("utf-8"), body_bytes, hashlib.sha256).digest()
-    signature_calc = base64.b64encode(digest).decode("utf-8")
-    if signature != signature_calc:
-        # 簽章不符：不要回 200，讓 Verify 知道失敗
-        return ("", 403)
+    # 以文字形式取得請求的內容
+    body = request.get_data(as_text=True)
+    app.logger.info("Request body: " + body)
 
-    # 驗簽通過：立刻回 200，避免 Verify 超時
-    threading.Thread(target=_handle_async, args=(body_text, signature), daemon=True).start()
-    return ("", 200)
-
-def _handle_async(body_text: str, signature: str):
+    # 處理 Webhook 事件
     try:
-        handler.handle(body_text, signature)
+        handler.handle(body, signature)
     except InvalidSignatureError:
-        # 理論上不會進來（已先驗過），保險起見
-        print("[ERROR] InvalidSignatureError (async)")
+        print("簽名錯誤，請檢查你的 channel secret 是否正確。")
+        abort(400)
     except Exception as e:
-        print(f"[ERROR] handle exception: {e}")
+        print(f"處理訊息時發生錯誤: {e}")
+        abort(400)
 
-# 文字回覆（echo 範例）
+    return 'OK', 200
+
+
+# 處理文字訊息事件
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    try:
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=event.message.text)
-        )
-    except Exception as e:
-        print(f"[ERROR] reply_message exception: {e}")
+    # 將收到的訊息原封不動地回傳
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=event.message.text)
+    )
 
+
+# 主程式進入點
 if __name__ == "__main__":
-    # Railway 需監聽 0.0.0.0:$PORT
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
