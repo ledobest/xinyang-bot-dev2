@@ -4,15 +4,9 @@
 import os
 from flask import Flask, request, abort
 
-from line_bot_sdk import (
-    LineBotApi, WebhookHandler
-)
-from line_bot_sdk.exceptions import (
-    InvalidSignatureError
-)
-from line_bot_sdk.models import (
-    MessageEvent, TextMessage, TextSendMessage,
-)
+from linebot import LineBotApi, WebhookHandler
+from linebot.exceptions import InvalidSignatureError
+from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
 # 初始化 Flask App
 app = Flask(__name__)
@@ -75,3 +69,4 @@ def handle_message(event):
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+
