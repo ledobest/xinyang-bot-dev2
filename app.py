@@ -2,6 +2,7 @@
 
 # 載入我們需要的工具
 import os
+import sys # 【修正】匯入 sys 模組，以便使用標準的退出指令
 from flask import Flask, request, abort
 
 # 【重要修正】根據官方文件，我們安裝的是 line-bot-sdk，但匯入時要用 linebot
@@ -25,7 +26,7 @@ CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN', None)
 # 檢查金鑰是否存在
 if not CHANNEL_SECRET or not CHANNEL_ACCESS_TOKEN:
     print("錯誤：LINE_CHANNEL_SECRET 或 LINE_CHANNEL_ACCESS_TOKEN 環境變數未設定。")
-    exit() # 如果金鑰不完整，直接結束程式
+    sys.exit() # 【修正】如果金鑰不完整，使用 sys.exit() 結束程式
 
 # 初始化 LINE 的處理工具
 try:
@@ -33,7 +34,7 @@ try:
     handler = WebhookHandler(CHANNEL_SECRET)
 except Exception as e:
     print(f"初始化 LINE SDK 時發生錯誤: {e}")
-    exit()
+    sys.exit() # 【修正】如果初始化失敗，也使用 sys.exit()
 
 # 健康檢查路由，方便我們確認服務是否活著
 @app.route("/health", methods=['GET'])
