@@ -58,7 +58,7 @@ def callback():
         print(f"處理訊息時發生錯誤: {e}")
         abort(400)
 
-    return 'OK'
+    return 'OK', 200
 
 
 # 處理文字訊息事件
@@ -75,3 +75,4 @@ def handle_message(event):
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+
