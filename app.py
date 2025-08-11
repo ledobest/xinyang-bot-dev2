@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-
 import os
-import sys
 from flask import Flask, request
 
 from linebot import LineBotApi, WebhookHandler
@@ -10,19 +8,21 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
 app = Flask(__name__)
 
+# 讀環境變數，但「先不退出」
 CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET')
 CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
 
-if not CHANNEL_SECRET or not CHANNEL_ACCESS_TOKEN:
-    print("錯誤：LINE_CHANNEL_SECRET 或 LINE_CHANNEL_ACCESS_TOKEN 環境變數未設定。")
-    sys.exit(1)
-
-try:
-    line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
-    handler = WebhookHandler(CHANNEL_SECRET)
-except Exception as e:
-    print(f"初始化 LINE SDK 時發生錯誤: {e}")
-    sys.exit(1)
+line_bot_api = None
+handler = None
+if CHANNEL_SECRET and CHANNEL_ACCESS_TOKEN:
+    try:
+        line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
+        handler = WebhookHandler(CHANNEL_SECRET)
+        app.logger.info("LINE SDK initialized.")
+    except Exception as e:
+        app.logger.exception(f"初始化 LINE SDK 失敗: {e}")
+else:
+    app.logger.warning("LINE 金鑰未設定，/callback 暫不可用。")
 
 @app.route("/", methods=['GET'])
 def index():
@@ -30,13 +30,18 @@ def index():
 
 @app.route("/health", methods=['GET'])
 def health_check():
-    return 'OK', 200
+    status = "OK (LINE ready)" if handler else "OK (LINE keys missing)"
+    return status, 200
 
 @app.route("/callback", methods=['POST'])
 def callback():
+    if handler is None:
+        # 服務活著，但尚未設定；回 503 讓你知道需要設變數
+        return 'Service not configured (missing LINE keys)', 503
+
     signature = request.headers.get('X-Line-Signature')
     if signature is None:
-        app.logger.warning("缺少 X-Line-Signature 標頭")
+        app.logger.warning("缺少 X-Line-Signature")
         return 'Bad Request', 400
 
     body = request.get_data(as_text=True)
@@ -46,15 +51,13 @@ def callback():
         handler.handle(body, signature)
     except InvalidSignatureError:
         app.logger.exception("簽名驗證錯誤：請檢查 CHANNEL_SECRET")
-        # 非法請求才回 400，避免 LINE 一直重試
         return 'Invalid signature', 400
     except LineBotApiError as e:
-        # 盡量把可用資訊都打出來
         app.logger.exception(f"LINE API 錯誤: {e}")
-        return 'OK', 200  # 回 200 以避免重試風暴
+        return 'OK', 200  # 避免 LINE 重試風暴
     except Exception as e:
-        app.logger.exception(f"處理訊息時發生未知錯誤: {e}")
-        return 'OK', 200  # 同上
+        app.logger.exception(f"處理訊息未知錯誤: {e}")
+        return 'OK', 200
 
     return 'OK', 200
 
