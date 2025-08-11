@@ -5,7 +5,10 @@ import os
 from flask import Flask, request, abort
 
 # 【重要】我們使用的是新版的 line-bot-sdk，這是正確的匯入路徑
-from linebot import LineBotApi, WebhookHandler
+from line_bot_sdk import (
+    LineBotApi, WebhookHandler
+)
+
 from line_bot_sdk.exceptions import (
     InvalidSignatureError
 )
